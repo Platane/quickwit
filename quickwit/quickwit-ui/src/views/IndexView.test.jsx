@@ -19,29 +19,31 @@ import { Client } from "../services/client";
 import IndexView from "./IndexView";
 import { BrowserRouter } from "react-router-dom";
 
-jest.mock('../services/client');
+jest.mock("../services/client");
 const mockedUsedNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
   useParams: () => ({
-    indexId: 'my-new-fresh-index-id'
-  })
+    indexId: "my-new-fresh-index-id",
+  }),
 }));
 
-test('renders IndexView', async () => {
+test("renders IndexView", async () => {
   const index = {
     metadata: {
       index_config: {
-        index_uri: 'my-new-fresh-index-uri',
-      }
+        index_uri: "my-new-fresh-index-uri",
+      },
     },
-    splits: []
+    splits: [],
   };
   Client.prototype.getIndex.mockImplementation(() => Promise.resolve(index));
 
   await act(async () => {
-    render( <IndexView /> , {wrapper: BrowserRouter});
+    render(<IndexView />, { wrapper: BrowserRouter });
   });
 
-  await waitFor(() => expect(screen.getByText(/my-new-fresh-index-uri/)).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByText(/my-new-fresh-index-uri/)).toBeInTheDocument(),
+  );
 });

@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import TopBar from '../components/TopBar';
-import { CssBaseline, ThemeProvider } from '@mui/material';
-import SideBar from '../components/SideBar';
-import { Navigate, Route, Routes } from 'react-router-dom';
-import SearchView from './SearchView';
-import IndexesView from './IndexesView';
-import { theme } from '../utils/theme';
-import IndexView from './IndexView';
-import { FullBoxContainer } from '../components/LayoutUtils';
-import { LocalStorageProvider } from '../providers/LocalStorageProvider';
-import ClusterView from './ClusterView';
-import NodeInfoView from './NodeInfoView';
-import ApiView from './ApiView';
+import TopBar from "../components/TopBar";
+import { CssBaseline, ThemeProvider } from "@mui/material";
+import SideBar from "../components/SideBar";
+import { Navigate, Route, Routes } from "react-router-dom";
+import SearchView from "./SearchView";
+import IndexesView from "./IndexesView";
+import { theme } from "../utils/theme";
+import IndexView from "./IndexView";
+import { FullBoxContainer } from "../components/LayoutUtils";
+import { LocalStorageProvider } from "../providers/LocalStorageProvider";
+import ClusterView from "./ClusterView";
+import NodeInfoView from "./NodeInfoView";
+import ApiView from "./ApiView";
 
 function App() {
   return (
     <ThemeProvider theme={theme}>
       <LocalStorageProvider>
-        <FullBoxContainer sx={{flexDirection: 'row', p: 0}}>
+        <FullBoxContainer sx={{ flexDirection: "row", p: 0 }}>
           <CssBaseline />
           <TopBar />
           <SideBar />
