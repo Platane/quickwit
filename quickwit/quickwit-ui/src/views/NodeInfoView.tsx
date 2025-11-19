@@ -27,9 +27,9 @@ import { Client } from "../services/client";
 import { QuickwitBuildInfo } from "../utils/models";
 
 const CustomTabPanel = styled(TabPanel)`
-padding-left: 0;
-padding-right: 0;
-height: 100%;
+  padding-left: 0;
+  padding-right: 0;
+  height: 100%;
 `;
 
 function NodeInfoView() {
