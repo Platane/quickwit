@@ -1,0 +1,20 @@
+.viz {
+    background-color: #eee2;
+}
+.split {
+    &:hover {
+        stroke-width: 1px;
+        stroke: #333;
+    }
+}
+[data-node] {
+    &[data-indexer] {
+        fill: papayawhip;
+        stroke: black;
+        stroke-width: 0.01;
+    }
+
+    &[data-selected="true"] {
+        fill: orange;
+    }
+}

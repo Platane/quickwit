@@ -18,73 +18,32 @@ import Loader from "../components/Loader";
 import { Client } from "../services/client";
 import { SplitMetadata } from "../utils/models";
 import * as styles from "./VeryCoolVizView.module.css";
+import {
+  Selection,
+  Snapshot,
+  VeryCoolViz,
+} from "../components/VeryCoolViz/VeryCoolViz";
 
 export const VeryCoolVizView = () => {
-  const data = useData();
-
-  if (!data) return <Loader />;
-
-  console.log(
-    data,
-    data.map((s) => [...new Set(s.splits.map((s) => s.maturity.type))]),
-  );
-
-  const index_width = 100;
-
-  const timeScale = 0.2; // s per drawing unit
-  const now = Date.now() / 1000;
+  const systemSnapshot = useSystemSnapshot();
+  const [selected, setSelected] = React.useState<Selection>(null);
 
   return (
     <ViewUnderAppBarBox sx={{ flexDirection: "row" }}>
-      <svg
-        className={styles.viz}
-        style={{ width: "100%", height: "100%" }}
-        viewBox={[-20, -20, index_width * data.length + 20 * 2, 400].join(" ")}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <title>very cool viz</title>
-        {data.map(({ indexName, splits }, i) => (
-          <g key={indexName} transform={`translate(${i * index_width},0)`}>
-            <rect
-              width={index_width - 10}
-              height={100}
-              x={5}
-              fill="#aaa"
-            ></rect>
-            <text x={5} y={5} style={{ fontSize: 5 }}>
-              {indexName}
-            </text>
-
-            {splits.map((s, i) => (
-              <g key={s.split_id}>
-                <rect
-                  title={`split_id:${s.split_id}`}
-                  className={styles.split}
-                  width={index_width - 20}
-                  x={10 + i}
-                  y={(now - s.time_range!.end) * timeScale}
-                  height={(s.time_range?.end - s.time_range!.start) * timeScale}
-                  fill={
-                    (s.split_state === "Published" && "#888") ||
-                    (s.split_state === "MarkedForDeletion" && "red")
-                  }
-                ></rect>
-              </g>
-            ))}
-          </g>
-        ))}
-      </svg>
+      {systemSnapshot && (
+        <VeryCoolViz
+          snapshot={systemSnapshot}
+          onSelect={setSelected}
+          selected={selected}
+        />
+      )}
+      {!systemSnapshot && <Loader />}
     </ViewUnderAppBarBox>
   );
 };
 
-const useData = () => {
-  const [splits, setSplits] = React.useState<
-    {
-      indexName: string;
-      splits: SplitMetadata[];
-    }[]
-  >();
+const useSystemSnapshot = () => {
+  const [snapshot, setSnapshot] = React.useState<Snapshot>();
   React.useEffect(() => {
     const quickwitClient = new Client();
     const abortController = new AbortController();
@@ -92,24 +51,17 @@ const useData = () => {
     const loop = async () => {
       if (abortController.signal.aborted) return;
 
-      const indexes = await quickwitClient.listIndexes();
-
-      const data = await Promise.all(
-        indexes.map(async (index) => {
-          const splits = await quickwitClient.getAllSplits(
-            index.index_config.index_id,
-          );
-
-          splits.sort(
-            (a, b) => (b.time_range?.end ?? 1) - (a.time_range?.end ?? 1),
-          );
-
-          return { indexName: index.index_config.index_id, splits };
-        }),
+      const res = await fetch("/ui/api-debug-example.json").then((res) =>
+        res.json(),
       );
 
+      const indexers = Object.keys(res)
+        .filter((name) => name.includes("indexer-"))
+        .map((nodeId) => ({ nodeId, ingestionRateBytePerSecond: 0 }));
+
       if (abortController.signal.aborted) return;
-      setSplits(data);
+
+      setSnapshot({ indexers, indexes: [] });
 
       setTimeout(loop, 3_000);
     };
@@ -119,9 +71,9 @@ const useData = () => {
     return () => {
       abortController.abort();
     };
-  }, [setSplits]);
+  }, [setSnapshot]);
 
-  return splits;
+  return snapshot;
 };
 
 export default VeryCoolVizView;
