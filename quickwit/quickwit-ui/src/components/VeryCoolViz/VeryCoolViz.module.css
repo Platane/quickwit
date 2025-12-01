@@ -8,11 +8,9 @@
     }
 }
 [data-node] {
-    &[data-indexer] {
-        fill: papayawhip;
-        stroke: black;
-        stroke-width: 0.01;
-    }
+    fill: papayawhip;
+    stroke: black;
+    stroke-width: 0.01;
 
     &[data-selected="true"] {
         fill: orange;

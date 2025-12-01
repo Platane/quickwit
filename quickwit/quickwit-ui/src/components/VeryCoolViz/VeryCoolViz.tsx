@@ -26,6 +26,16 @@ export type Snapshot = {
     name: string;
     splits: { creator_nodeId: string; startDate: number; endDate: number }[];
   }[];
+  searchers: {
+    nodeId: string;
+    searchRateBytePerSecond: number;
+  }[];
+  metastores: {
+    nodeId: string;
+  }[];
+  controlPlanes: {
+    nodeId: string;
+  }[];
 };
 export type Props = {
   selected: Selection;
@@ -43,8 +53,10 @@ export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
 
   const layout = createLayout({
     nodeIndexerCount: snapshot.indexers.length,
-    nodeSearcherCount: 0,
-    indexCount: snapshot.indexes.length,
+    indexCount: 2,
+    nodeSearcherCount: snapshot.searchers.length,
+    nodeMetastoreCount: snapshot.metastores.length,
+    nodeControlPlaneCount: snapshot.controlPlanes.length,
   });
 
   return (
@@ -74,6 +86,64 @@ export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
             onClick={(e) => {
               e.stopPropagation();
               onSelect({ type: "node", nodeId: indexer.nodeId });
+            }}
+          />
+        </g>
+      ))}
+
+      {snapshot.searchers.map((searcher, i) => (
+        <g key={searcher.nodeId} transform={transform(layout.searchers[i]!)}>
+          <title>{searcher.nodeId}</title>
+          <circle
+            r={0.4}
+            data-node
+            data-searcher
+            data-selected={
+              selected?.type === "node" && selected.nodeId === searcher.nodeId
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect({ type: "node", nodeId: searcher.nodeId });
+            }}
+          />
+        </g>
+      ))}
+
+      {snapshot.metastores.map((metastore, i) => (
+        <g key={metastore.nodeId} transform={transform(layout.metastores[i]!)}>
+          <title>{metastore.nodeId}</title>
+          <circle
+            r={0.4}
+            data-node
+            data-metastore
+            data-selected={
+              selected?.type === "node" && selected.nodeId === metastore.nodeId
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect({ type: "node", nodeId: metastore.nodeId });
+            }}
+          />
+        </g>
+      ))}
+
+      {snapshot.controlPlanes.map((controlPlane, i) => (
+        <g
+          key={controlPlane.nodeId}
+          transform={transform(layout.controlPlanes[i]!)}
+        >
+          <title>{controlPlane.nodeId}</title>
+          <circle
+            r={0.4}
+            data-node
+            data-control-plane
+            data-selected={
+              selected?.type === "node" &&
+              selected.nodeId === controlPlane.nodeId
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect({ type: "node", nodeId: controlPlane.nodeId });
             }}
           />
         </g>

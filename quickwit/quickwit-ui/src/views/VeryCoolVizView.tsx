@@ -59,9 +59,27 @@ const useSystemSnapshot = () => {
         .filter((name) => name.includes("indexer-"))
         .map((nodeId) => ({ nodeId, ingestionRateBytePerSecond: 0 }));
 
+      const searchers = Object.keys(res)
+        .filter((name) => name.includes("searcher-"))
+        .map((nodeId) => ({ nodeId, searchRateBytePerSecond: 0 }));
+
+      const metastores = Object.keys(res)
+        .filter((name) => name.includes("metastore-"))
+        .map((nodeId) => ({ nodeId, metastoreSizeByte: 0 }));
+
+      const controlPlanes = Object.keys(res)
+        .filter((name) => name.includes("control-plane-"))
+        .map((nodeId) => ({ nodeId, controlPlaneSizeByte: 0 }));
+
       if (abortController.signal.aborted) return;
 
-      setSnapshot({ indexers, indexes: [] });
+      setSnapshot({
+        indexers,
+        indexes: [],
+        searchers,
+        metastores,
+        controlPlanes,
+      });
 
       setTimeout(loop, 3_000);
     };

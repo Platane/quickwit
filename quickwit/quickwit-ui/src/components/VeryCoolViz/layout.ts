@@ -1,3 +1,5 @@
+import { get } from "cypress/types/jquery";
+
 /**
  * let be this function responsible for all elements positioning
  *
@@ -6,17 +8,77 @@
  */
 export const createLayout = ({
   nodeIndexerCount,
+  nodeSearcherCount,
+  nodeMetastoreCount,
+  nodeControlPlaneCount,
+  indexCount,
 }: {
   nodeIndexerCount: number;
   nodeSearcherCount: number;
+  nodeMetastoreCount: number;
+  nodeControlPlaneCount: number;
   indexCount: number;
 }) => {
-  const indexersPositions = createClusterLayout(nodeIndexerCount);
-  const indexerBox = getBoundingBox(indexersPositions);
+  const spacing = 8; // spacing between clusters
+  const padding = 2;
+  const indexersLayout = createClusterLayout(nodeIndexerCount);
+  const searchersLayout = createClusterLayout(nodeSearcherCount);
+  const metastoresLayout = createClusterLayout(nodeMetastoreCount);
+  const controlPlanesLayout = createClusterLayout(nodeControlPlaneCount);
+
+  const indexerBox = getBoundingBox(indexersLayout);
+  const searcherBox = getBoundingBox(searchersLayout);
+  const metastoreBox = getBoundingBox(metastoresLayout);
+  const controlPlaneBox = getBoundingBox(controlPlanesLayout);
+
+  const indexerWidth = indexerBox.max.x - indexerBox.min.x;
+  const indexerHeight = indexerBox.max.y - indexerBox.min.y;
+  const searcherWidth = searcherBox.max.x - searcherBox.min.x;
+  const searcherHeight = searcherBox.max.y - searcherBox.min.y;
+  const metastoreWidth = metastoreBox.max.x - metastoreBox.min.x;
+  const metastoreHeight = metastoreBox.max.y - metastoreBox.min.y;
+  const controlPlaneWidth = controlPlaneBox.max.x - controlPlaneBox.min.x;
+  const controlPlaneHeight = controlPlaneBox.max.y - controlPlaneBox.min.y;
+
+  const indexersPositions = indexersLayout.map((pos) => ({
+    x: pos.x - indexerBox.min.x - indexerWidth / 2 - spacing / 2,
+    y: pos.y,
+  }));
+
+  const searchersPositions = searchersLayout.map((pos) => ({
+    x: pos.x - searcherBox.min.x + searcherWidth / 2 + spacing / 2,
+    y: pos.y,
+  }));
+
+  const controlPlanePositions = controlPlanesLayout.map((pos) => ({
+    x: pos.x - controlPlaneBox.min.x - controlPlaneWidth / 2 - spacing / 8,
+    y: pos.y - controlPlaneBox.min.y - controlPlaneHeight / 2 - spacing / 2,
+  }));
+
+  const metastoresPositions = metastoresLayout.map((pos) => ({
+    x: pos.x - metastoreBox.min.x + metastoreWidth / 2 + spacing / 8,
+    y: pos.y - metastoreBox.min.y - metastoreHeight / 2 - spacing / 2,
+  }));
+
+  const positions = [
+    ...indexersPositions,
+    ...searchersPositions,
+    ...metastoresPositions,
+    ...controlPlanePositions,
+  ];
+  const viewportBox = getBoundingBox(positions);
 
   return {
     indexers: indexersPositions,
-    worldViewport: { x: -10, y: -10, width: 40, height: 40 },
+    searchers: searchersPositions,
+    metastores: metastoresPositions,
+    controlPlanes: controlPlanePositions,
+    worldViewport: {
+      x: viewportBox.min.x - padding,
+      y: viewportBox.min.y - padding,
+      width: viewportBox.max.x - viewportBox.min.x + padding * 2,
+      height: viewportBox.max.y - viewportBox.min.y + padding * 2,
+    },
   };
 };
 
