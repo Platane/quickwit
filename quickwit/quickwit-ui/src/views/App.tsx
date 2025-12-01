@@ -25,6 +25,7 @@ import IndexesView from "./IndexesView";
 import IndexView from "./IndexView";
 import NodeInfoView from "./NodeInfoView";
 import SearchView from "./SearchView";
+import VeryCoolVizView from "./VeryCoolVizView";
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
             <Route path="cluster" element={<ClusterView />} />
             <Route path="node-info" element={<NodeInfoView />} />
             <Route path="api-playground" element={<ApiView />} />
+            <Route path="/very-cool-viz" element={<VeryCoolVizView />} />
           </Routes>
         </FullBoxContainer>
       </LocalStorageProvider>

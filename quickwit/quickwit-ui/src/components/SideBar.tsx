@@ -25,6 +25,7 @@ import { Database } from "@styled-icons/feather/Database";
 import { Settings } from "@styled-icons/feather/Settings";
 import { GroupWork } from "@styled-icons/material-outlined/GroupWork";
 import { CodeSSlash } from "@styled-icons/remix-line/CodeSSlash";
+import { VipDiamond } from "@styled-icons/remix-line/VipDiamond";
 import * as React from "react";
 import { Link as RouterLink, LinkProps as RouterLinkProps } from "react-router";
 import { useLocalStorage } from "../providers/LocalStorageProvider";
@@ -112,6 +113,11 @@ const SideBar = () => {
           to="/api-playground"
           primary={<Typography variant="body1">API </Typography>}
           icon={<CodeSSlash size="18px" />}
+        />
+        <ListItemLink
+          to="/very-cool-viz"
+          primary={<Typography variant="body1">Very Cool Viz</Typography>}
+          icon={<VipDiamond size="18px" />}
         />
       </List>
     </SideBarWrapper>
