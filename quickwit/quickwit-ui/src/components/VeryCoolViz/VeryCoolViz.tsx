@@ -85,9 +85,12 @@ export const VeryCoolViz = ({
     ),
   );
 
-  //
-  // todo
-  // camera panning, via viewBox prop
+  const svgRef = React.useRef<SVGSVGElement>(null);
+  const [zoom, setZoom] = React.useState(1);
+  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  const isDraggingRef = React.useRef(false);
+  const positionRef = React.useRef({ x: 0, y: 0 });
+  const dragDistanceRef = React.useRef(0);
 
   const layout = createLayout({
     nodeIndexerCount: snapshot.indexers.length,
@@ -97,18 +100,76 @@ export const VeryCoolViz = ({
     nodeControlPlaneCount: snapshot.controlPlanes.length,
   });
 
+  const baseViewport = layout.worldViewport;
+
+  const handleMouseDown = (event: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    positionRef.current = { x: event.clientX, y: event.clientY };
+    dragDistanceRef.current = 0;
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+  };
+
+  const handleMouseMove = (event: React.MouseEvent) => {
+    if (!isDraggingRef.current || !svgRef.current) return;
+
+    const deltaX = event.clientX - positionRef.current.x;
+    const deltaY = event.clientY - positionRef.current.y;
+
+    dragDistanceRef.current += Math.abs(deltaX) + Math.abs(deltaY);
+
+    const worldDeltaX =
+      (deltaX * (baseViewport.width / zoom)) / svgRef.current.clientWidth;
+    const worldDeltaY =
+      (deltaY * (baseViewport.height / zoom)) / svgRef.current.clientHeight;
+
+    setPan((prevPan) => ({
+      x: prevPan.x - worldDeltaX,
+      y: prevPan.y - worldDeltaY,
+    }));
+
+    positionRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleWheel = (event: React.WheelEvent) => {
+    event.preventDefault();
+    const zoomDelta = 1 + event.deltaY * -0.001;
+    const newZoom = zoom * zoomDelta;
+
+    const clampedZoom = Math.min(Math.max(newZoom, 0.5), 5);
+    setZoom(clampedZoom);
+  };
+
+  const zoomedWidth = baseViewport.width / zoom;
+  const zoomedHeight = baseViewport.height / zoom;
+
   const viewBox = [
-    layout.worldViewport.x,
-    layout.worldViewport.y,
-    layout.worldViewport.width,
-    layout.worldViewport.height,
+    baseViewport.x + pan.x + (baseViewport.width - zoomedWidth) / 2,
+    baseViewport.y + pan.y + (baseViewport.height - zoomedHeight) / 2,
+    zoomedWidth,
+    zoomedHeight,
   ].join(" ");
+
+  const handleClick = () => {
+    // Prevent onClick if user was dragging
+    if (dragDistanceRef.current > 5) return;
+    onSelect(null);
+  };
 
   return (
     <svg
+      ref={svgRef}
       className={styles.viz}
+      style={{ cursor: isDraggingRef.current ? "grabbing" : "grab" }}
       viewBox={viewBox}
-      onClick={() => onSelect(null)}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
     >
       <title>very cool viz</title>
 
