@@ -29,7 +29,8 @@ export type Snapshot = {
   indexes: {
     name: string;
     splits: {
-      creatorNodeId: string;
+      split_id: string;
+      node_id: string;
       time_range: { start: number; end: number };
       uncompressed_docs_size_in_bytes: number;
       compressed_docs_size_in_bytes: number;
@@ -57,6 +58,17 @@ export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
   //
   // todo
   // detect things to animate by comparing the previous snapshot with the current one
+  const previousSnapshot = usePrevious(snapshot);
+
+  const prev = new Set(
+    previousSnapshot.indexes.flatMap((i) => i.splits).map((s) => s.split_id),
+  );
+  console.log(
+    "new split",
+    ...snapshot.indexes.flatMap((i) =>
+      i.splits.filter((s) => !prev.has(s.split_id)),
+    ),
+  );
 
   //
   // todo
@@ -242,3 +254,12 @@ export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
 };
 
 const transform = ({ x, y }: Point) => `translate(${x},${y})`;
+
+const usePrevious = <V,>(value: V) => {
+  const ref = React.useRef({ previous: value, current: value });
+  if (ref.current.current !== value) {
+    ref.current.previous = ref.current.current;
+    ref.current.current = value;
+  }
+  return ref.current.previous;
+};

@@ -180,7 +180,8 @@ const useSystemSnapshot = () => {
             uncompressed_docs_size_in_bytes:
               split.uncompressed_docs_size_in_bytes,
             compressed_docs_size_in_bytes: split.footer_offsets.end,
-            creatorNodeId: split.node_id,
+            node_id: split.node_id,
+            split_id: split.split_id,
             time_range: split.time_range!,
             num_docs: split.num_docs,
             num_merge_ops: split.num_merge_ops,
@@ -191,7 +192,7 @@ const useSystemSnapshot = () => {
         controlPlanes,
       });
 
-      setTimeout(loop, 5_000);
+      setTimeout(loop, 10_000);
     };
 
     loop();
