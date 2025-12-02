@@ -19,73 +19,117 @@ export const createLayout = ({
   nodeControlPlaneCount: number;
   indexCount: number;
 }) => {
+  //
+  // position the indexes
+  const INDEX_WIDTH = 2;
+  const INDEX_GAP = 0.3;
+  const indexesPositions = Array.from({ length: indexCount }, (_, i) => {
+    const x = i * INDEX_WIDTH + i * INDEX_GAP;
+    const y = 0;
+    const width = INDEX_WIDTH;
+    const height = 8;
+    return { x, y, width, height };
+  });
+
+  const indexesBox = enlargeBox(
+    getBoundingBoxFromBoxes(indexesPositions),
+    INDEX_GAP * 2,
+  );
+  indexesBox.width += 1.3;
+  indexesBox.x -= 1;
+
+  //
+  // positions the indexers
+  const indexersPositions = createClusterLayout(nodeIndexerCount);
+  const indexersBox = enlargeBox(
+    getBoundingBoxFromPoints(indexersPositions),
+    1.2,
+  );
+  {
+    const tx = -indexersBox.x + indexesBox.x - indexersBox.width - 3;
+    const ty = 1;
+    [...indexersPositions, indexersBox].forEach((p) => {
+      p.x += tx;
+      p.y += ty;
+    });
+  }
+
+  //
+  // positions the searchers
+  const searchersPositions = createClusterLayout(nodeSearcherCount);
+  const searchersBox = enlargeBox(
+    getBoundingBoxFromPoints(searchersPositions),
+    1.2,
+  );
+  {
+    const tx = indexesBox.x + indexesBox.width - searchersBox.x + 3;
+    const ty = 2;
+    [...searchersPositions, searchersBox].forEach((p) => {
+      p.x += tx;
+      p.y += ty;
+    });
+  }
+
+  //
+  // positions the metastores
+  const metastoresPositions = createClusterLayout(nodeSearcherCount);
+  const metastoresBox = enlargeBox(
+    getBoundingBoxFromPoints(metastoresPositions),
+    1.2,
+  );
+  {
+    const tx = -metastoresBox.x + indexesBox.x - metastoresBox.width - 2;
+    const ty = indexersBox.y - metastoresBox.y + indexersBox.height + 2;
+    [...metastoresPositions, metastoresBox].forEach((p) => {
+      p.x += tx;
+      p.y += ty;
+    });
+  }
+
   const spacing = 8; // spacing between clusters
   const padding = 2;
-  const indexersLayout = createClusterLayout(nodeIndexerCount);
-  const searchersLayout = createClusterLayout(nodeSearcherCount);
-  const metastoresLayout = createClusterLayout(nodeMetastoreCount);
-  const controlPlanesLayout = createClusterLayout(nodeControlPlaneCount);
-
-  const indexerBox = getBoundingBox(indexersLayout);
-  const searcherBox = getBoundingBox(searchersLayout);
-  const metastoreBox = getBoundingBox(metastoresLayout);
-  const controlPlaneBox = getBoundingBox(controlPlanesLayout);
-
-  const indexerWidth = indexerBox.max.x - indexerBox.min.x;
-  const indexerHeight = indexerBox.max.y - indexerBox.min.y;
-  const searcherWidth = searcherBox.max.x - searcherBox.min.x;
-  const searcherHeight = searcherBox.max.y - searcherBox.min.y;
-  const metastoreWidth = metastoreBox.max.x - metastoreBox.min.x;
-  const metastoreHeight = metastoreBox.max.y - metastoreBox.min.y;
-  const controlPlaneWidth = controlPlaneBox.max.x - controlPlaneBox.min.x;
-  const controlPlaneHeight = controlPlaneBox.max.y - controlPlaneBox.min.y;
-
-  const indexersPositions = indexersLayout.map((pos) => ({
-    x: pos.x - indexerBox.min.x - indexerWidth / 2 - spacing / 2,
-    y: pos.y,
-  }));
-
-  const searchersPositions = searchersLayout.map((pos) => ({
-    x: pos.x - searcherBox.min.x + searcherWidth / 2 + spacing / 2,
-    y: pos.y,
-  }));
-
-  const controlPlanePositions = controlPlanesLayout.map((pos) => ({
-    x: pos.x - controlPlaneBox.min.x - controlPlaneWidth / 2 - spacing / 8,
-    y: pos.y - controlPlaneBox.min.y - controlPlaneHeight / 2 - spacing / 2,
-  }));
-
-  const metastoresPositions = metastoresLayout.map((pos) => ({
-    x: pos.x - metastoreBox.min.x + metastoreWidth / 2 + spacing / 8,
-    y: pos.y - metastoreBox.min.y - metastoreHeight / 2 - spacing / 2,
-  }));
+  const controlPlanesPositions = createClusterLayout(nodeControlPlaneCount);
 
   const positions = [
+    { x: 0, y: 0 },
     ...indexersPositions,
     ...searchersPositions,
     ...metastoresPositions,
-    ...controlPlanePositions,
+    ...controlPlanesPositions,
   ];
-  const viewportBox = getBoundingBox(positions);
+  const viewportBox = getBoundingBoxFromBoxes([
+    getBoundingBoxFromPoints(positions),
+    indexesBox,
+  ]);
 
   return {
-    indexers: indexersPositions,
-    searchers: searchersPositions,
-    metastores: metastoresPositions,
-    controlPlanes: controlPlanePositions,
+    indexersPositions,
+    indexersBox,
+
+    searchersPositions,
+    searchersBox,
+
+    indexesPositions,
+    indexesBox,
+
+    metastoresPositions,
+    metastoresBox,
+
+    controlPlanesPositions,
+
     worldViewport: {
-      x: viewportBox.min.x - padding,
-      y: viewportBox.min.y - padding,
-      width: viewportBox.max.x - viewportBox.min.x + padding * 2,
-      height: viewportBox.max.y - viewportBox.min.y + padding * 2,
+      x: viewportBox.x - padding,
+      y: viewportBox.y - padding,
+      width: viewportBox.width + padding * 2,
+      height: viewportBox.height + padding * 2,
     },
   };
 };
 
 export type Point = { x: number; y: number };
-export type Rect = { x: number; y: number; width: number; height: number };
+export type Box = { x: number; y: number; width: number; height: number };
 
-export const getBoundingBox = (points: Point[]) => {
+export const getBoundingBoxFromPoints = (points: Point[]): Box => {
   const max = {
     x: Math.max(...points.map((p) => p.x)),
     y: Math.max(...points.map((p) => p.y)),
@@ -94,8 +138,21 @@ export const getBoundingBox = (points: Point[]) => {
     x: Math.min(...points.map((p) => p.x)),
     y: Math.min(...points.map((p) => p.y)),
   };
-  return { max, min };
+  return { ...min, width: max.x - min.x, height: max.y - min.y };
 };
+export const getBoundingBoxFromBoxes = (boxes: Box[]): Box =>
+  getBoundingBoxFromPoints(
+    boxes.flatMap((box) => [
+      box,
+      { x: box.x + box.width, y: box.y + box.height },
+    ]),
+  );
+export const enlargeBox = (box: Box, margin: number): Box => ({
+  x: box.x - margin,
+  y: box.y - margin,
+  width: box.width + margin * 2,
+  height: box.height + margin * 2,
+});
 
 export const createClusterLayout = (n: number) => {
   const l = Math.ceil(Math.sqrt(n));

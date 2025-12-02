@@ -261,9 +261,11 @@ export const EMPTY_INDEX_METADATA: IndexMetadata = {
 };
 
 export type SplitMetadata = {
+  node_id: string;
   split_id: string;
   split_state: string;
   num_docs: number;
+  num_merge_ops: number;
   uncompressed_docs_size_in_bytes: number;
   time_range: null | Range;
   update_timestamp: number;

@@ -1,9 +1,0 @@
-.viz {
-  background-color: #eee2;
-}
-.split {
-  &:hover {
-    stroke-width: 1px;
-    stroke: #333;
-  }
-}

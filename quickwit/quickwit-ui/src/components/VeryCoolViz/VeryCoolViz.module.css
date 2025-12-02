@@ -1,5 +1,11 @@
 .viz {
-    background-color: #eee2;
+    background-color: #eee4;
+    width: 100%;
+    height: 100%;
+
+    text {
+        font-size: 0.2px;
+    }
 }
 .split {
     &:hover {

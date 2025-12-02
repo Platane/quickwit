@@ -16,13 +16,14 @@ import React from "react";
 import { ViewUnderAppBarBox } from "../components/LayoutUtils";
 import Loader from "../components/Loader";
 import { Client } from "../services/client";
-import { SplitMetadata } from "../utils/models";
+import { IndexMetadata, Metric, SplitMetadata } from "../utils/models";
 import * as styles from "./VeryCoolVizView.module.css";
 import {
   Selection,
   Snapshot,
   VeryCoolViz,
 } from "../components/VeryCoolViz/VeryCoolViz";
+import { Box } from "@mui/material";
 
 export const VeryCoolVizView = () => {
   const systemSnapshot = useSystemSnapshot();
@@ -30,68 +31,194 @@ export const VeryCoolVizView = () => {
 
   return (
     <ViewUnderAppBarBox sx={{ flexDirection: "row" }}>
-      {systemSnapshot && (
-        <VeryCoolViz
-          snapshot={systemSnapshot}
-          onSelect={setSelected}
-          selected={selected}
-        />
-      )}
-      {!systemSnapshot && <Loader />}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+        }}
+      >
+        <Box sx={{ minWidth: 200, padding: "10px" }}>
+          <Details selected={selected} snapshot={systemSnapshot} />
+        </Box>
+        <Box>
+          {systemSnapshot && (
+            <VeryCoolViz
+              snapshot={systemSnapshot}
+              onSelect={setSelected}
+              selected={selected}
+            />
+          )}
+          {!systemSnapshot && <Loader />}
+        </Box>
+      </Box>
     </ViewUnderAppBarBox>
   );
+};
+
+const Details = ({
+  selected,
+  snapshot,
+}: {
+  selected: Selection;
+  snapshot: undefined | Snapshot;
+}) => {
+  const selectedNode =
+    selected?.type === "node" &&
+    (snapshot?.indexers.find((node) => node.nodeId === selected.nodeId) ||
+      snapshot?.searchers.find((node) => node.nodeId === selected.nodeId) ||
+      snapshot?.metastores.find((node) => node.nodeId === selected.nodeId));
+
+  if (selectedNode)
+    return (
+      <>
+        <h4>node</h4>
+        <dl>
+          <dt>Node Id</dt>
+          <dd>{selectedNode.nodeId}</dd>
+        </dl>
+      </>
+    );
+
+  if (selected?.type === "group")
+    return (
+      <>
+        <h4>group</h4>
+        <dl>
+          <dt>Group</dt>
+          <dd>{selected.group}</dd>
+        </dl>
+      </>
+    );
+
+  return null;
 };
 
 const useSystemSnapshot = () => {
   const [snapshot, setSnapshot] = React.useState<Snapshot>();
   React.useEffect(() => {
-    const quickwitClient = new Client();
     const abortController = new AbortController();
 
     const loop = async () => {
       if (abortController.signal.aborted) return;
 
-      const res = await fetch("/ui/api-debug-example.json").then((res) =>
-        res.json(),
+      const parseMetrics = (text: string): Record<string, number> =>
+        Object.fromEntries(
+          [...text.matchAll(/^([^#\s]+)+\s+(.*)$/gm)].map(([, key, value]) => [
+            key,
+            +value!.trim(),
+          ]),
+        );
+
+      const [debug, indexes, metrics] = await Promise.all([
+        fetch("/api/developer/debug", { signal: abortController.signal })
+          .then((res) => res.json())
+          .then((d: DebugInfo) => d),
+
+        fetch("/api/v1/indexes", { signal: abortController.signal })
+          .then((res) => res.json())
+          .then((indexes: IndexMetadata[]) =>
+            Promise.all(
+              indexes.map((index) =>
+                fetch(
+                  `/api/v1/indexes/${index.index_config.index_id}/splits?limit=200&split_states=Published,Staged`,
+                  {
+                    signal: abortController.signal,
+                  },
+                )
+                  .then((res) => res.json())
+                  .then(({ splits }: { splits: SplitMetadata[] }) => ({
+                    index,
+                    splits,
+                  })),
+              ),
+            ),
+          ),
+
+        fetch("/metrics", { signal: abortController.signal })
+          .then((res) => res.text())
+          .then(parseMetrics),
+      ]);
+
+      const nodes = Object.values(debug).sort((a, b) =>
+        a.node_config.node_id.localeCompare(b.node_config.node_id),
       );
 
-      const indexers = Object.keys(res)
-        .filter((name) => name.includes("indexer-"))
-        .map((nodeId) => ({ nodeId, ingestionRateBytePerSecond: 0 }));
+      const indexers = nodes
+        .filter((node) => node.node_config.enabled_services.includes("indexer"))
+        .map((node) => ({
+          nodeId: node.node_config.node_id,
+          ingestionRateBytePerSecond: 0,
+        }));
 
-      const searchers = Object.keys(res)
-        .filter((name) => name.includes("searcher-"))
-        .map((nodeId) => ({ nodeId, searchRateBytePerSecond: 0 }));
+      const searchers = nodes
+        .filter((node) =>
+          node.node_config.enabled_services.includes("searcher"),
+        )
+        .map((node) => ({
+          nodeId: node.node_config.node_id,
+          ingestionRateBytePerSecond: 0,
+        }));
 
-      const metastores = Object.keys(res)
-        .filter((name) => name.includes("metastore-"))
-        .map((nodeId) => ({ nodeId, metastoreSizeByte: 0 }));
+      const metastores = nodes
+        .filter((node) =>
+          node.node_config.enabled_services.includes("metastore"),
+        )
+        .map((node) => ({
+          nodeId: node.node_config.node_id,
+          ingestionRateBytePerSecond: 0,
+        }));
 
-      const controlPlanes = Object.keys(res)
-        .filter((name) => name.includes("control-plane-"))
-        .map((nodeId) => ({ nodeId, controlPlaneSizeByte: 0 }));
+      const controlPlanes = [];
 
       if (abortController.signal.aborted) return;
 
       setSnapshot({
         indexers,
-        indexes: [],
+        indexes: indexes.map(({ index, splits }) => ({
+          name: index.index_config.index_id,
+          splits: splits.map((split) => ({
+            uncompressed_docs_size_in_bytes:
+              split.uncompressed_docs_size_in_bytes,
+            compressed_docs_size_in_bytes: split.footer_offsets.end,
+            creatorNodeId: split.node_id,
+            time_range: split.time_range!,
+            num_docs: split.num_docs,
+            num_merge_ops: split.num_merge_ops,
+          })),
+        })),
         searchers,
         metastores,
         controlPlanes,
       });
 
-      setTimeout(loop, 3_000);
+      setTimeout(loop, 5_000);
     };
 
     loop();
 
     return () => {
-      abortController.abort();
+      abortController.abort("component unmounted");
     };
-  }, [setSnapshot]);
+  }, []);
 
   return snapshot;
+};
+
+type DebugInfo = {
+  [nodeId: string]: {
+    buildInfo: unknown;
+    control_plane?: unknown;
+    node_config: {
+      node_id: string;
+      enabled_services: (
+        | "indexer"
+        | "metastore"
+        | "janitor"
+        | "control_plane"
+        | "searcher"
+      )[];
+    };
+  };
 };
 
 export default VeryCoolVizView;
