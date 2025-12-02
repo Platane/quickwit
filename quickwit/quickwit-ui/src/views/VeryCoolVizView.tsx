@@ -15,7 +15,6 @@
 import React from "react";
 import { ViewUnderAppBarBox } from "../components/LayoutUtils";
 import Loader from "../components/Loader";
-import { Client } from "../services/client";
 import { IndexMetadata, Metric, SplitMetadata } from "../utils/models";
 import * as styles from "./VeryCoolVizView.module.css";
 import {
@@ -28,6 +27,15 @@ import { Box } from "@mui/material";
 export const VeryCoolVizView = () => {
   const systemSnapshot = useSystemSnapshot();
   const [selected, setSelected] = React.useState<Selection>(null);
+
+  const now = Math.round(Date.now() / 1_000);
+  const timeRange = { end: now, start: now - 10 * 60 };
+
+  const [, forceRerender] = React.useReducer(() => ({}), {});
+  React.useEffect(() => {
+    const i = setInterval(forceRerender, 2_000);
+    return () => clearInterval(i);
+  }, [systemSnapshot]);
 
   return (
     <ViewUnderAppBarBox sx={{ flexDirection: "row" }}>
@@ -43,9 +51,10 @@ export const VeryCoolVizView = () => {
         <Box>
           {systemSnapshot && (
             <VeryCoolViz
+              timeRange={timeRange}
               snapshot={systemSnapshot}
-              onSelect={setSelected}
               selected={selected}
+              onSelect={setSelected}
             />
           )}
           {!systemSnapshot && <Loader />}
@@ -174,25 +183,29 @@ const useSystemSnapshot = () => {
 
       setSnapshot({
         indexers,
-        indexes: indexes.map(({ index, splits }) => ({
-          name: index.index_config.index_id,
-          splits: splits.map((split) => ({
-            uncompressed_docs_size_in_bytes:
-              split.uncompressed_docs_size_in_bytes,
-            compressed_docs_size_in_bytes: split.footer_offsets.end,
-            node_id: split.node_id,
-            split_id: split.split_id,
-            time_range: split.time_range!,
-            num_docs: split.num_docs,
-            num_merge_ops: split.num_merge_ops,
-          })),
-        })),
+        indexes: indexes
+          .map(({ index, splits }) => ({
+            name: index.index_config.index_id,
+            splits: splits
+              .map((split) => ({
+                uncompressed_docs_size_in_bytes:
+                  split.uncompressed_docs_size_in_bytes,
+                compressed_docs_size_in_bytes: split.footer_offsets.end,
+                node_id: split.node_id,
+                split_id: split.split_id,
+                time_range: split.time_range!,
+                num_docs: split.num_docs,
+                num_merge_ops: split.num_merge_ops,
+              }))
+              .sort((a, b) => a.time_range.start - b.time_range.start),
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
         searchers,
         metastores,
         controlPlanes,
       });
 
-      setTimeout(loop, 10_000);
+      setTimeout(loop, 5_000);
     };
 
     loop();

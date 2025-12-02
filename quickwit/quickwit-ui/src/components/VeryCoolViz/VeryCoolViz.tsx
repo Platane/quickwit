@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import React from "react";
+import React, { ReactHTMLElement } from "react";
 import * as styles from "./VeryCoolViz.module.css";
-import { createLayout, Point } from "./layout";
+import { Box, createLayout, Point } from "./layout";
 
 export type Selection =
   | { type: "node"; nodeId: string }
@@ -51,22 +51,37 @@ export type Snapshot = {
 };
 export type Props = {
   selected: Selection;
-  onSelect: (s: Selection) => void;
   snapshot: Snapshot;
+  timeRange: { start: number; end: number };
+
+  onSelect: (s: Selection) => void;
 };
-export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
+export const VeryCoolViz = ({
+  selected,
+  snapshot,
+  timeRange,
+
+  onSelect,
+}: Props) => {
   //
   // todo
   // detect things to animate by comparing the previous snapshot with the current one
   const previousSnapshot = usePrevious(snapshot);
 
-  const prev = new Set(
-    previousSnapshot.indexes.flatMap((i) => i.splits).map((s) => s.split_id),
+  const previousSpitIds = React.useMemo(
+    () =>
+      new Set(
+        previousSnapshot.indexes
+          .flatMap((i) => i.splits)
+          .map((s) => s.split_id),
+      ),
+    [previousSnapshot],
   );
+
   console.log(
-    "new split",
-    ...snapshot.indexes.flatMap((i) =>
-      i.splits.filter((s) => !prev.has(s.split_id)),
+    "new splits:",
+    snapshot.indexes.flatMap((i) =>
+      i.splits.filter((s) => !previousSpitIds.has(s.split_id)),
     ),
   );
 
@@ -226,6 +241,54 @@ export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
         </g>
       ))}
 
+      {snapshot.indexes.map((index, i) =>
+        index.splits.map((split) => {
+          const container = layout.indexesPositions[i]!;
+
+          const hash = hashToInt(split.node_id);
+          const h2 = (((hash % 100) + 100) % 100) / 100;
+
+          const x = container.x + 0.1 + (container.width - 0.2) * 0.6 * h2;
+          const y =
+            container.y +
+            0.1 +
+            ((timeRange.end - split.time_range.end) /
+              (timeRange.end - timeRange.start)) *
+              container.height;
+
+          const width = (container.width - 0.2) * 0.4;
+          // const height = 0.1;
+          const height =
+            ((split.time_range.end - split.time_range.start) /
+              (timeRange.end - timeRange.start)) *
+            container.height;
+
+          const justCreated =
+            !previousSpitIds.has(split.node_id) && split.num_merge_ops === 0;
+
+          const indexerIndex = snapshot.indexers.findIndex(
+            (node) => node.nodeId === split.node_id,
+          );
+
+          const source =
+            justCreated && layout.indexersPositions[indexerIndex]
+              ? {
+                  x: layout.indexersPositions[indexerIndex].x,
+                  y: layout.indexersPositions[indexerIndex].y,
+                }
+              : undefined;
+
+          return (
+            <Split
+              key={split.split_id}
+              split={split}
+              position={{ x, y, width, height }}
+              source={source}
+            />
+          );
+        }),
+      )}
+
       {/*
 
       {snapshot.controlPlanes.map((controlPlane, i) => (
@@ -253,6 +316,50 @@ export const VeryCoolViz = ({ selected, snapshot, onSelect }: Props) => {
   );
 };
 
+const Split = ({
+  split,
+  position,
+  source,
+}: {
+  split: Snapshot["indexes"][number]["splits"][number];
+  position: Box;
+  source?: Point;
+}) => {
+  const hash = hashToInt(split.node_id);
+  const h1 = (((hash % 15) + 15) % 15) / 15;
+
+  const color = `hsl(220deg  50%  ${20 + h1 * 60}%)`;
+
+  const animate = React.useCallback(
+    (el: SVGRectElement) => {
+      if (!source || !el) return;
+
+      const tx = source.x - position.x;
+      const ty = source.y - position.y;
+      el.animate(
+        [
+          //
+          { offset: 0, transform: `translate(${tx}px,${ty}px)` },
+          { offset: 1, transform: `translate(0,0)` },
+        ],
+        { duration: 800 },
+      );
+    },
+    [source?.x, source?.y],
+  );
+
+  return (
+    <rect
+      x={position.x}
+      y={position.y}
+      width={position.width}
+      height={position.height}
+      fill={color}
+      ref={animate}
+    />
+  );
+};
+
 const transform = ({ x, y }: Point) => `translate(${x},${y})`;
 
 const usePrevious = <V,>(value: V) => {
@@ -263,3 +370,11 @@ const usePrevious = <V,>(value: V) => {
   }
   return ref.current.previous;
 };
+
+const hashToInt = (x: string) =>
+  x.split("").reduce((hash, s) => {
+    const char = s.charCodeAt(0);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+    return hash;
+  }, 23912095);
