@@ -22,6 +22,10 @@ export type Selection =
   | {
       type: "group";
       group: "indexers" | "searchers" | "metastores" | "objectStorage";
+      groupMetrics: {
+        name: string;
+        value: number;
+      }[];
     }
   | null;
 export type Snapshot = {
@@ -48,6 +52,7 @@ export type Snapshot = {
   controlPlanes: {
     nodeId: string;
   }[];
+  metrics: Record<string, number>;
 };
 export type Props = {
   selected: Selection;
@@ -55,6 +60,10 @@ export type Props = {
   timeRange: { start: number; end: number };
 
   onSelect: (s: Selection) => void;
+};
+type Bucket = {
+  le: number;
+  count: number;
 };
 export const VeryCoolViz = ({
   selected,
@@ -158,6 +167,11 @@ export const VeryCoolViz = ({
     onSelect(null);
   };
 
+  const searchBuckets = parseBuckets(
+    snapshot.metrics,
+    "quickwit_search_root_search_request_duration_seconds",
+  );
+
   return (
     <svg
       ref={svgRef}
@@ -176,19 +190,75 @@ export const VeryCoolViz = ({
       <g
         onClick={(e) => {
           e.stopPropagation();
-          onSelect({ type: "group", group: "indexers" });
+          onSelect({
+            type: "group",
+            group: "indexers",
+            groupMetrics: [
+              {
+                name: "In Flight Requests",
+                value:
+                  snapshot.metrics[
+                    'quickwit_indexing_grpc_requests_in_flight{kind="client",rpc="apply_indexing_plan"}'
+                  ] || 0,
+              },
+              {
+                name: "Total Requests (success)",
+                value:
+                  snapshot.metrics[
+                    'quickwit_indexing_grpc_requests_total{kind="client",rpc="apply_indexing_plan",status="success"}'
+                  ] || 0,
+              },
+              {
+                name: "Total Requests (error)",
+                value:
+                  snapshot.metrics[
+                    'quickwit_indexing_grpc_requests_total{kind="client",rpc="apply_indexing_plan",status="error"}'
+                  ] || 0,
+              },
+            ],
+          });
         }}
       >
         <rect {...layout.indexersBox} rx={0.3} fill="purple" />
         <text x={layout.indexersBox.x + 0.23} y={layout.indexersBox.y - 0.1}>
-          Indexers Nodes
+          Indexers Nodes{" ("}
+          {
+            snapshot.metrics[
+              'quickwit_indexing_grpc_requests_in_flight{kind="client",rpc="apply_indexing_plan"}'
+            ]
+          }
+          {" requests in flight)"}
         </text>
       </g>
 
       <g
         onClick={(e) => {
           e.stopPropagation();
-          onSelect({ type: "group", group: "searchers" });
+          onSelect({
+            type: "group",
+            group: "searchers",
+            groupMetrics: [
+              {
+                name: "Total Requests (success)",
+                value:
+                  snapshot.metrics[
+                    'quickwit_search_root_search_requests_total{kind="server",status="success"}'
+                  ] || 0,
+              },
+              {
+                name: "P50 Search Latency (ms)",
+                value: calculateLatency(searchBuckets, 0.5),
+              },
+              {
+                name: "P90 Search Latency (ms)",
+                value: calculateLatency(searchBuckets, 0.9),
+              },
+              {
+                name: "P99 Search Latency (ms)",
+                value: calculateLatency(searchBuckets, 0.99),
+              },
+            ],
+          });
         }}
       >
         <rect {...layout.searchersBox} rx={0.3} fill="purple" />
@@ -200,7 +270,11 @@ export const VeryCoolViz = ({
       <g
         onClick={(e) => {
           e.stopPropagation();
-          onSelect({ type: "group", group: "metastores" });
+          onSelect({
+            type: "group",
+            group: "metastores",
+            groupMetrics: [],
+          });
         }}
       >
         <rect {...layout.metastoresBox} rx={0.3} fill="purple" />
@@ -254,7 +328,10 @@ export const VeryCoolViz = ({
             }
             onClick={(e) => {
               e.stopPropagation();
-              onSelect({ type: "node", nodeId: node.nodeId });
+              onSelect({
+                type: "node",
+                nodeId: node.nodeId,
+              });
             }}
           />
         </g>
@@ -439,3 +516,67 @@ const hashToInt = (x: string) =>
     hash = hash & hash;
     return hash;
   }, 23912095);
+
+const parseBuckets = (
+  metrics: Record<string, number>,
+  metricPrefix: string,
+): Bucket[] => {
+  const bucketPattern = new RegExp(
+    `${metricPrefix}_bucket\\{.*le="([^"]+)"\\}`,
+  );
+  const buckets: Bucket[] = [];
+
+  for (const [key, value] of Object.entries(metrics)) {
+    if (!key.includes(`${metricPrefix}_bucket`)) {
+      continue;
+    }
+
+    const match = key.match(bucketPattern);
+    if (match) {
+      const leStr = match[1];
+      if (leStr === "+Inf") {
+        continue;
+      }
+      const le = parseFloat(leStr ?? "");
+      const count = value;
+
+      buckets.push({ le, count });
+    }
+  }
+
+  return buckets.sort((a, b) => a.le - b.le);
+};
+
+const calculateLatency = (buckets: Bucket[], percentile: number): number => {
+  if (buckets.length === 0) return 0;
+  if (buckets.length === 1) return buckets[0]!.le * 1000;
+  // Get total count from the last bucket (cumulative count)
+  const totalCount = buckets[buckets.length - 1]!.count;
+
+  if (totalCount === 0) return 0;
+
+  const rank = percentile * totalCount;
+
+  // Find bucket where cumulative count crosses the rank
+  for (let i = 0; i < buckets.length; i++) {
+    if (buckets[i]!.count >= rank) {
+      const prevCount = i > 0 ? buckets[i - 1]!.count : 0;
+      const prevLe = i > 0 ? buckets[i - 1]!.le : 0;
+
+      // Avoid division by zero
+      if (buckets[i]!.count === prevCount) {
+        return buckets[i]!.le;
+      }
+
+      // Linear interpolation within bucket
+      const fraction = (rank - prevCount) / (buckets[i]!.count - prevCount);
+      const latencySeconds = prevLe + fraction * (buckets[i]!.le - prevLe);
+
+      // Convert to milliseconds
+      return latencySeconds * 1000;
+    }
+  }
+
+  // Fallback: return last bucket boundary in milliseconds
+  return buckets[buckets.length - 1]!.le * 1000;
+};

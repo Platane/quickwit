@@ -93,8 +93,15 @@ const Details = ({
       <>
         <h4>group</h4>
         <dl>
-          <dt>Group</dt>
-          <dd>{selected.group}</dd>
+          <dt>Group: {selected.group}</dt>
+          {selected.groupMetrics &&
+            selected.groupMetrics.map((metric) => (
+              <div key={metric.name}>
+                <dd>
+                  - {metric.name}: {metric.value}
+                </dd>
+              </div>
+            ))}
         </dl>
       </>
     );
@@ -203,6 +210,7 @@ const useSystemSnapshot = () => {
         searchers,
         metastores,
         controlPlanes,
+        metrics,
       });
 
       setTimeout(loop, 5_000);
