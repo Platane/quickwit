@@ -21,14 +21,16 @@ import {
   Snapshot,
   VeryCoolViz,
 } from "../components/VeryCoolViz/VeryCoolViz";
-import { useSystemSnapshot } from "../services/useSystemSnapshotMock";
+import { useSystemSnapshot } from "../services/useSystemSnapshot";
 
 export const VeryCoolVizView = () => {
   const systemSnapshot = useSystemSnapshot();
   const [selected, setSelected] = React.useState<Selection>(null);
 
+  const [timeWindowLength, setTimeWindowSize] = React.useState(5);
+
   const now = Math.round(Date.now() / 1_000);
-  const timeRange = { end: now, start: now - 10 * 60 };
+  const timeRange = { end: now, start: now - timeWindowLength * 60 };
 
   const [, forceRerender] = React.useReducer(() => ({}), {});
   React.useEffect(() => {
@@ -45,6 +47,18 @@ export const VeryCoolVizView = () => {
         }}
       >
         <Box sx={{ minWidth: 200, padding: "10px" }}>
+          <label htmlFor="timeWindowLength">time window length</label>
+          <div>
+            {timeWindowLength} minutes
+            <input
+              id="timeWindowLength"
+              type="range"
+              min="1"
+              max={12 * 60}
+              value={timeWindowLength}
+              onChange={(e) => setTimeWindowSize(+e.currentTarget.value)}
+            ></input>
+          </div>
           <Details selected={selected} snapshot={systemSnapshot} />
         </Box>
         <Box>

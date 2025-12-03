@@ -30,10 +30,9 @@ export const useSystemSnapshot = () => {
             Promise.all(
               indexes.map((index) =>
                 fetch(
-                  `/api/v1/indexes/${index.index_config.index_id}/splits?limit=200&split_states=Published,Staged`,
-                  {
-                    signal: abortController.signal,
-                  },
+                  // `/api/v1/indexes/${index.index_config.index_id}/splits?limit=200&split_states=Published,Staged`,
+                  `/api/v1/indexes/${index.index_config.index_id}/splits?limit=400`,
+                  { signal: abortController.signal },
                 )
                   .then((res) => res.json())
                   .then(({ splits }: { splits: SplitMetadata[] }) => ({
@@ -58,6 +57,10 @@ export const useSystemSnapshot = () => {
         .map((node) => ({
           nodeId: node.node_config.node_id,
           ingestionRateBytePerSecond: 0,
+          shardCount: [...Object.values(node.ingester.shards)].reduce(
+            (sum, shards) => sum + shards.length,
+            0,
+          ),
         }));
 
       const searchers = nodes
@@ -89,16 +92,14 @@ export const useSystemSnapshot = () => {
             name: index.index_config.index_id,
             splits: splits
               .map((split) => ({
-                uncompressed_docs_size_in_bytes:
-                  split.uncompressed_docs_size_in_bytes,
+                ...split,
                 compressed_docs_size_in_bytes: split.footer_offsets.end,
-                node_id: split.node_id,
-                split_id: split.split_id,
                 time_range: split.time_range!,
-                num_docs: split.num_docs,
-                num_merge_ops: split.num_merge_ops,
               }))
-              .sort((a, b) => a.time_range.start - b.time_range.start),
+              .filter(
+                (s) => s.time_range.end > Date.now() / 1000 - 24 * 60 * 60,
+              )
+              .sort((a, b) => a.create_timestamp - b.create_timestamp),
           }))
           .sort((a, b) => a.name.localeCompare(b.name)),
         searchers,

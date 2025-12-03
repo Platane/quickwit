@@ -334,6 +334,11 @@ export const VeryCoolViz = ({
               });
             }}
           />
+          <g transform="translate( -0.4 , -0.4 )">
+            {Array.from({ length: node.shardCount }, (_, i) => (
+              <circle key={i} r={0.02} cx={i * 0.06} fill="blue" />
+            ))}
+          </g>
         </g>
       ))}
 
@@ -379,11 +384,45 @@ export const VeryCoolViz = ({
         </g>
       ))}
 
-      {snapshot.indexes.map((index, i) =>
+      {/*<SplitList
+        splits={snapshot.indexes[0]!.splits}
+        timeRange={timeRange}
+        container={{
+          ...layout.indexesPositions[0]!,
+        }}
+      />*/}
+
+      <SplitList
+        splits={snapshot.indexes[0]!.splits.filter(
+          (x) => x.split_state === "Published",
+        )}
+        timeRange={timeRange}
+        container={{
+          ...layout.indexesPositions[0]!,
+          width: layout.indexesPositions[0]!.width / 2,
+        }}
+      />
+      <SplitList
+        splits={snapshot.indexes[0]!.splits.filter(
+          (x) => x.split_state !== "Published",
+        )}
+        timeRange={timeRange}
+        container={{
+          ...layout.indexesPositions[0]!,
+          x:
+            layout.indexesPositions[0]!.x +
+            layout.indexesPositions[0]!.width / 2,
+          width: layout.indexesPositions[0]!.width / 2,
+        }}
+      />
+
+      {/*{snapshot.indexes.map((index, i) =>
         index.splits.map((split) => {
+          if (split.time_range.end < timeRange.start) return null;
+
           const container = layout.indexesPositions[i]!;
 
-          const hash = hashToInt(split.node_id);
+          const hash = hashToInt(split.split_id);
           const h2 = (((hash % 100) + 100) % 100) / 100;
 
           const padding = 0.06;
@@ -427,7 +466,7 @@ export const VeryCoolViz = ({
             />
           );
         }),
-      )}
+      )}*/}
 
       {/*
 
@@ -456,30 +495,145 @@ export const VeryCoolViz = ({
   );
 };
 
+type S = { time_range: { start: number; end: number } };
+const SplitList = ({
+  splits,
+  timeRange,
+  container,
+}: {
+  splits: S[];
+  timeRange: { start: number; end: number };
+  container: Box;
+}) => {
+  const splitLaneRef = React.useRef<Record<string, number>>({});
+  const layout = React.useMemo(() => {
+    /**
+     * find the index where to insert the time range
+     * return -1 if there is no place to insert without overlap
+     */
+    const findIndex = (lane: S[], x: S) => {
+      let i = 0;
+
+      if (lane.length === 0 || lane[0]!.time_range.end <= x.time_range.start)
+        return 0;
+
+      for (
+        ;
+        i < lane.length && lane[i]!.time_range.start > x.time_range.end;
+        i++
+      );
+
+      if (!lane[i] || lane[i]!.time_range.end <= x.time_range.start) return i;
+
+      return -1;
+    };
+
+    if (false) {
+      const arr = [
+        //
+        { time_range: { end: 100, start: 90 } },
+        { time_range: { end: 80, start: 60 } },
+        { time_range: { end: 40, start: 30 } },
+        { time_range: { end: 5, start: 0 } },
+        { time_range: { end: -10, start: -20 } },
+      ];
+      const a = { time_range: { end: 55, start: 50 } };
+      const i = findIndex(arr, a);
+      arr.splice(i, 0, a);
+      console.log(arr.map((u) => u.time_range));
+    }
+
+    const lanes = Array.from({ length: 0 }, () => []);
+    for (const split of splits) {
+      let j = splitLaneRef.current[split.split_id] ?? 0;
+      while (j < lanes.length) {
+        const i = findIndex(lanes[j], split);
+        if (i !== -1) {
+          lanes[j].splice(i, 0, split);
+          break;
+        }
+        j++;
+      }
+      splitLaneRef.current[split.split_id] = j;
+      if (j === lanes.length) lanes.push([split]);
+    }
+
+    return lanes;
+  }, [splits]);
+
+  return (
+    <g>
+      {layout.map((splits, i, { length }) =>
+        splits.map((split) => {
+          return (
+            <Split
+              key={split.split_id}
+              data-lane={i}
+              data-split-id={split.split_id}
+              split={split}
+              position={{
+                x: container.x + (i * container.width) / length,
+                y:
+                  container.y +
+                  ((timeRange.end - split.time_range.end) /
+                    (timeRange.end - timeRange.start)) *
+                    container.height,
+                width: container.width / length,
+                height:
+                  ((split.time_range.end - split.time_range.start) /
+                    (timeRange.end - timeRange.start)) *
+                  container.height,
+              }}
+            />
+          );
+        }),
+      )}
+    </g>
+  );
+};
+
 const Split = ({
   split,
   position,
   source,
+  ...props
 }: {
   split: Snapshot["indexes"][number]["splits"][number];
   position: Box;
   source?: Point;
 }) => {
-  const hash = hashToInt(split.node_id);
-  const h1 = (((hash % 15) + 15) % 15) / 15;
+  const hash = hashToInt(split.split_id);
+  const h1 = (Math.abs(hash) % 37) / 37;
+  const h2 = (Math.abs(hash) % 28) / 28;
 
-  const color = `hsl(220deg  50%  ${20 + h1 * 60}%)`;
+  let color = `hsl(${h2 * 120 + 50}deg  50%  ${20 + h1 * 60}%)`;
+  if (split.split_state === "Published")
+    color = `hsl(${h2 * 60 + 100}deg  50%  ${20 + h1 * 60}%)`;
+  else color = `hsl(${h2 * 60 - 20}deg  50%  ${20 + h1 * 60}%)`;
 
   const animate = React.useCallback(
     (el: SVGRectElement) => {
       if (!source || !el) return;
 
-      const tx = source.x - position.x;
-      const ty = source.y - position.y;
+      const tx = source.x - position.x - position.width / 2;
+      const ty = source.y - position.y - position.height / 2;
       el.animate(
         [
-          //
-          { offset: 0, transform: `translate(${tx}px,${ty}px)` },
+          {
+            offset: 0,
+            transform: `translate(${tx}px,${ty}px)`,
+            opacity: 0.2,
+          },
+          {
+            offset: 0.5,
+            transform: `translate(${tx}px,${ty}px)`,
+            opacity: 1,
+          },
+
+          {
+            offset: 0.75,
+            transform: `translate(${tx * 0.5}px,${ty * 0.5 - 3}px)`,
+          },
           { offset: 1, transform: `translate(0,0)` },
         ],
         { duration: 800 },
@@ -490,6 +644,8 @@ const Split = ({
 
   return (
     <rect
+      {...props}
+      className={styles.split}
       x={position.x}
       y={position.y}
       width={position.width}

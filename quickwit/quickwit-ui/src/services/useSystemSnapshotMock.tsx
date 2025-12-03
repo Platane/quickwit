@@ -33,6 +33,7 @@ export const useSystemSnapshot = () => {
             indexers[Math.floor(Math.random() * indexers.length)]!.nodeId,
           time_range: { start, end },
           num_merge_ops: 0,
+          create_timestamp: now,
         };
       }).sort((a, b) => a.time_range.start - b.time_range.start),
     }));
@@ -42,21 +43,22 @@ export const useSystemSnapshot = () => {
 
       for (const index of indexes) {
         for (const indexer of indexers) {
-          if (Math.random() < 0.1) {
+          if (Math.random() < 0.3) {
             const now = Date.now() / 1000;
             const end = now;
-            const start = end - (Math.random() + 0.5) * 1 * 60;
+            const start = end - (Math.random() + 0.5) * 0.1 * 60;
 
             index.splits.push({
-              split_id: `split-${index.splits.length}`,
+              split_id: `split-${index.splits.length}-${Math.random()}`,
               node_id: indexer.nodeId,
               time_range: { start, end },
               num_merge_ops: 0,
+              create_timestamp: now,
             });
           }
         }
 
-        index.splits.sort((a, b) => a.time_range.start - b.time_range.start);
+        index.splits.sort((a, b) => a.create_timestamp - b.create_timestamp);
       }
 
       setSnapshot({
