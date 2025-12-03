@@ -1,5 +1,3 @@
-import { get } from "cypress/types/jquery";
-
 /**
  * let be this function responsible for all elements positioning
  *
@@ -62,7 +60,7 @@ export const createLayout = ({
     1.2,
   );
   {
-    const tx = indexesBox.x + indexesBox.width - searchersBox.x + 3;
+    const tx = indexesBox.x + indexesBox.width - searchersBox.x + 4;
     const ty = 2;
     [...searchersPositions, searchersBox].forEach((p) => {
       p.x += tx;
@@ -72,7 +70,7 @@ export const createLayout = ({
 
   //
   // positions the metastores
-  const metastoresPositions = createClusterLayout(nodeSearcherCount);
+  const metastoresPositions = createClusterLayout(nodeMetastoreCount);
   const metastoresBox = enlargeBox(
     getBoundingBoxFromPoints(metastoresPositions),
     1.2,
@@ -86,7 +84,6 @@ export const createLayout = ({
     });
   }
 
-  const spacing = 8; // spacing between clusters
   const padding = 2;
   const controlPlanesPositions = createClusterLayout(nodeControlPlaneCount);
 
@@ -161,4 +158,74 @@ export const createClusterLayout = (n: number) => {
     const x = (i % l) + (y % 2 ? 0.5 : 0);
     return { x, y };
   });
+};
+
+/**
+ * arrange the split so they stack
+ */
+export const getSplitsLayout = <Split extends S & { split_id: string }>(
+  container: Box,
+  timeRange: { start: number; end: number },
+  splits: Split[],
+  memo: Record<string, number>,
+) => {
+  const lanes = Array.from(
+    { length: Math.max(0, ...Object.values(memo)) },
+    () => [] as Split[],
+  );
+  for (const split of splits) {
+    let j = memo[split.split_id] ?? 0;
+    while (j < lanes.length) {
+      const i = findIndex(lanes[j], split);
+      if (i !== -1) {
+        lanes[j].splice(i, 0, split);
+        break;
+      }
+      j++;
+    }
+    memo[split.split_id] = j;
+    if (j === lanes.length) lanes.push([split]);
+  }
+
+  const positions = Object.fromEntries(
+    lanes.flatMap((splits, j, { length }) =>
+      splits.map((split) => {
+        const position = {
+          x: container.x + (j * container.width) / length,
+          y:
+            container.y +
+            ((timeRange.end - split.time_range.end) /
+              (timeRange.end - timeRange.start)) *
+              container.height,
+          width: container.width / length,
+          height:
+            ((split.time_range.end - split.time_range.start) /
+              (timeRange.end - timeRange.start)) *
+            container.height,
+        };
+
+        return [split.split_id, position] as const;
+      }),
+    ),
+  );
+
+  return positions;
+};
+
+type S = { time_range: { start: number; end: number } };
+/**
+ * find the index where to insert the time range
+ * return -1 if there is no place to insert without overlap
+ */
+const findIndex = (lane: S[], x: S) => {
+  let i = 0;
+
+  if (lane.length === 0 || lane[0]!.time_range.end <= x.time_range.start)
+    return 0;
+
+  for (; i < lane.length && lane[i]!.time_range.start > x.time_range.end; i++);
+
+  if (!lane[i] || lane[i]!.time_range.end <= x.time_range.start) return i;
+
+  return -1;
 };

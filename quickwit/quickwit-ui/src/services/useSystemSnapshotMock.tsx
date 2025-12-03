@@ -34,6 +34,7 @@ export const useSystemSnapshot = () => {
           time_range: { start, end },
           num_merge_ops: 0,
           create_timestamp: now,
+          num_docs: Math.floor(Math.random() * 10_000),
         };
       }).sort((a, b) => a.time_range.start - b.time_range.start),
     }));
@@ -54,6 +55,7 @@ export const useSystemSnapshot = () => {
               time_range: { start, end },
               num_merge_ops: 0,
               create_timestamp: now,
+              num_docs: Math.floor(Math.random() * 10_000),
             });
           }
         }

@@ -61,7 +61,7 @@ export const VeryCoolVizView = () => {
           </div>
           <Details selected={selected} snapshot={systemSnapshot} />
         </Box>
-        <Box>
+        <Box style={{ width: "100%", height: "100%" }}>
           {systemSnapshot && (
             <VeryCoolViz
               timeRange={timeRange}

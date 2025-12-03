@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import React, { ReactHTMLElement } from "react";
-import { Box, createLayout, Point } from "./layout";
+import { Box, createLayout, getSplitsLayout, Point } from "./layout";
 import * as styles from "./VeryCoolViz.module.css";
 
 export type Selection =
@@ -506,88 +506,28 @@ const SplitList = ({
   container: Box;
 }) => {
   const splitLaneRef = React.useRef<Record<string, number>>({});
-  const layout = React.useMemo(() => {
-    /**
-     * find the index where to insert the time range
-     * return -1 if there is no place to insert without overlap
-     */
-    const findIndex = (lane: S[], x: S) => {
-      let i = 0;
-
-      if (lane.length === 0 || lane[0]!.time_range.end <= x.time_range.start)
-        return 0;
-
-      for (
-        ;
-        i < lane.length && lane[i]!.time_range.start > x.time_range.end;
-        i++
-      );
-
-      if (!lane[i] || lane[i]!.time_range.end <= x.time_range.start) return i;
-
-      return -1;
-    };
-
-    if (false) {
-      const arr = [
-        //
-        { time_range: { end: 100, start: 90 } },
-        { time_range: { end: 80, start: 60 } },
-        { time_range: { end: 40, start: 30 } },
-        { time_range: { end: 5, start: 0 } },
-        { time_range: { end: -10, start: -20 } },
-      ];
-      const a = { time_range: { end: 55, start: 50 } };
-      const i = findIndex(arr, a);
-      arr.splice(i, 0, a);
-      console.log(arr.map((u) => u.time_range));
-    }
-
-    const lanes = Array.from({ length: 0 }, () => []);
-    for (const split of splits) {
-      let j = splitLaneRef.current[split.split_id] ?? 0;
-      while (j < lanes.length) {
-        const i = findIndex(lanes[j], split);
-        if (i !== -1) {
-          lanes[j].splice(i, 0, split);
-          break;
-        }
-        j++;
-      }
-      splitLaneRef.current[split.split_id] = j;
-      if (j === lanes.length) lanes.push([split]);
-    }
-
-    return lanes;
-  }, [splits]);
+  const layout = getSplitsLayout(
+    container,
+    timeRange,
+    splits,
+    splitLaneRef.current,
+  );
 
   return (
     <g>
-      {layout.map((splits, i, { length }) =>
-        splits.map((split) => {
-          return (
-            <Split
-              key={split.split_id}
-              data-lane={i}
-              data-split-id={split.split_id}
-              split={split}
-              position={{
-                x: container.x + (i * container.width) / length,
-                y:
-                  container.y +
-                  ((timeRange.end - split.time_range.end) /
-                    (timeRange.end - timeRange.start)) *
-                    container.height,
-                width: container.width / length,
-                height:
-                  ((split.time_range.end - split.time_range.start) /
-                    (timeRange.end - timeRange.start)) *
-                  container.height,
-              }}
-            />
-          );
-        }),
-      )}
+      {splits.map((split) => {
+        const pos = layout[split.split_id];
+        if (!pos) return null;
+
+        return (
+          <Split
+            key={split.split_id}
+            data-split-id={split.split_id}
+            split={split}
+            position={pos}
+          />
+        );
+      })}
     </g>
   );
 };
