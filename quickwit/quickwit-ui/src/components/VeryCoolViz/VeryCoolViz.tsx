@@ -13,8 +13,8 @@
 // limitations under the License.
 
 import React, { ReactHTMLElement } from "react";
-import * as styles from "./VeryCoolViz.module.css";
 import { Box, createLayout, Point } from "./layout";
+import * as styles from "./VeryCoolViz.module.css";
 
 export type Selection =
   | { type: "node"; nodeId: string }
@@ -386,23 +386,25 @@ export const VeryCoolViz = ({
           const hash = hashToInt(split.node_id);
           const h2 = (((hash % 100) + 100) % 100) / 100;
 
-          const x = container.x + 0.1 + (container.width - 0.2) * 0.6 * h2;
+          const padding = 0.06;
+
+          const x =
+            container.x + padding + (container.width - padding * 2) * 0.6 * h2;
           const y =
             container.y +
-            0.1 +
+            0.25 +
             ((timeRange.end - split.time_range.end) /
               (timeRange.end - timeRange.start)) *
               container.height;
 
-          const width = (container.width - 0.2) * 0.4;
-          // const height = 0.1;
+          const width = (container.width - padding * 2) * 0.4;
           const height =
             ((split.time_range.end - split.time_range.start) /
               (timeRange.end - timeRange.start)) *
             container.height;
 
           const justCreated =
-            !previousSpitIds.has(split.node_id) && split.num_merge_ops === 0;
+            !previousSpitIds.has(split.split_id) && split.num_merge_ops === 0;
 
           const indexerIndex = snapshot.indexers.findIndex(
             (node) => node.nodeId === split.node_id,

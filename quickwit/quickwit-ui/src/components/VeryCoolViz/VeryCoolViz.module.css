@@ -1,24 +1,24 @@
 .viz {
-    background-color: #eee4;
-    width: 100%;
-    height: 100%;
+  background-color: #eee4;
+  width: 100%;
+  height: 100%;
 
-    text {
-        font-size: 0.2px;
-    }
+  text {
+    font-size: 0.2px;
+  }
 }
 .split {
-    &:hover {
-        stroke-width: 1px;
-        stroke: #333;
-    }
+  &:hover {
+    stroke-width: 1px;
+    stroke: #333;
+  }
 }
 [data-node] {
-    fill: papayawhip;
-    stroke: black;
-    stroke-width: 0.01;
+  fill: papayawhip;
+  stroke: black;
+  stroke-width: 0.01;
 
-    &[data-selected="true"] {
-        fill: orange;
-    }
+  &[data-selected="true"] {
+    fill: orange;
+  }
 }
