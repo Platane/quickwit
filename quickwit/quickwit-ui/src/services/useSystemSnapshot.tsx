@@ -97,7 +97,7 @@ export const useSystemSnapshot = () => {
                 time_range: split.time_range!,
               }))
               .filter(
-                (s) => s.time_range.end > Date.now() / 1000 - 24 * 60 * 60,
+                (s) => s.time_range.end > Date.now() / 1000 - 12 * 60 * 60,
               )
               .sort((a, b) => a.create_timestamp - b.create_timestamp),
           }))

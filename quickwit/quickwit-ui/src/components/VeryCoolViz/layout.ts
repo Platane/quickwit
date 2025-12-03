@@ -19,7 +19,7 @@ export const createLayout = ({
 }) => {
   //
   // position the indexes
-  const INDEX_WIDTH = 4;
+  const INDEX_WIDTH = 8;
   const INDEX_GAP = 0.3;
   const indexesPositions = Array.from({ length: indexCount }, (_, i) => {
     const x = i * INDEX_WIDTH + i * INDEX_GAP;

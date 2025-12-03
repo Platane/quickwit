@@ -20,8 +20,8 @@ import {
   Selection,
   Snapshot,
   VeryCoolViz,
-} from "../components/VeryCoolViz/VeryCoolViz";
-import { useSystemSnapshot } from "../services/useSystemSnapshot";
+} from "../components/VeryCoolViz/VeryCoolVizRTF";
+import { useSystemSnapshot } from "../services/useSystemSnapshotMock";
 
 export const VeryCoolVizView = () => {
   const systemSnapshot = useSystemSnapshot();
@@ -29,12 +29,12 @@ export const VeryCoolVizView = () => {
 
   const [timeWindowLength, setTimeWindowSize] = React.useState(5);
 
-  const now = Math.round(Date.now() / 1_000);
+  const now = Date.now() / 1000;
   const timeRange = { end: now, start: now - timeWindowLength * 60 };
 
   const [, forceRerender] = React.useReducer(() => ({}), {});
   React.useEffect(() => {
-    const i = setInterval(forceRerender, 2_000);
+    const i = setInterval(forceRerender, 200);
     return () => clearInterval(i);
   }, [systemSnapshot]);
 

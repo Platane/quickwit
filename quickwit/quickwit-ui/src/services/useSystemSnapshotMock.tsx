@@ -6,7 +6,7 @@ export const useSystemSnapshot = () => {
   React.useEffect(() => {
     const abortController = new AbortController();
 
-    const indexers = Array.from({ length: 30 }, (_, i) => ({
+    const indexers = Array.from({ length: 16 }, (_, i) => ({
       nodeId: `indexer-${i}`,
     }));
 
@@ -35,6 +35,7 @@ export const useSystemSnapshot = () => {
           num_merge_ops: 0,
           create_timestamp: now,
           num_docs: Math.floor(Math.random() * 10_000),
+          split_state: "Published",
         };
       }).sort((a, b) => a.time_range.start - b.time_range.start),
     }));
@@ -44,10 +45,10 @@ export const useSystemSnapshot = () => {
 
       for (const index of indexes) {
         for (const indexer of indexers) {
-          if (Math.random() < 0.3) {
+          if (Math.random() < 0.1) {
             const now = Date.now() / 1000;
             const end = now;
-            const start = end - (Math.random() + 0.5) * 0.1 * 60;
+            const start = end - (Math.random() + 0.5) * 0.3 * 60;
 
             index.splits.push({
               split_id: `split-${index.splits.length}-${Math.random()}`,
@@ -56,6 +57,7 @@ export const useSystemSnapshot = () => {
               num_merge_ops: 0,
               create_timestamp: now,
               num_docs: Math.floor(Math.random() * 10_000),
+              split_state: "Published",
             });
           }
         }
