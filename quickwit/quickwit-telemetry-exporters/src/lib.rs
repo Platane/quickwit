@@ -35,6 +35,16 @@ mod metrics;
 mod otlp;
 pub mod prometheus;
 
+pub use metrics::init_bootstrap_metrics;
+
+/// The node identity after configuration defaults and environment overrides have been resolved.
+/// Exporters consume these values rather than resolving node configuration independently.
+#[derive(Clone, Copy, Debug)]
+pub struct NodeIdentity<'a> {
+    pub cluster_id: &'a str,
+    pub node_id: &'a str,
+}
+
 pub type EnvFilterReloadFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 
 pub fn do_nothing_env_filter_reload_fn() -> EnvFilterReloadFn {
@@ -131,23 +141,28 @@ pub fn default_tracing_registry(
 /// The caller provides the tracing registry so binaries can add process-specific
 /// layers before OpenTelemetry layers are attached.
 ///
-/// NOTE: this function must be called before any metric is emitted so metric handles
-/// are registered against the production recorder instead of a noop/default
-/// recorder.
+/// `node_identity` is the resolved identity of a running node. Commands without a node
+/// configuration should pass `None`, leaving environment-provided resource attributes intact.
+///
+/// Call this before any metric is emitted, or call [`init_bootstrap_metrics`] before
+/// loading the node config. Otherwise cached metric handles can bind permanently to
+/// the default noop recorder.
 pub fn init_telemetry(
     service_version: &str,
     registry: impl Subscriber + for<'span> LookupSpan<'span> + Send + Sync + 'static,
+    node_identity: Option<NodeIdentity<'_>>,
 ) -> anyhow::Result<TelemetryHandle> {
     let otlp_config = otlp::OtlpExporterConfig::load_from_env();
 
-    let meter_provider = metrics::init_metrics_provider(service_version, &otlp_config)?;
+    let meter_provider =
+        metrics::init_metrics_provider(service_version, &otlp_config, node_identity)?;
 
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     // Note on disabling ANSI characters: setting the ansi boolean on event format is insufficient.
     // It is thus set on layers, see https://github.com/tokio-rs/tracing/issues/1817
     let telemetry_handle = if otlp_config.is_enabled() {
-        let resource = otlp::quickwit_resource(service_version);
+        let resource = otlp::quickwit_resource(service_version, node_identity);
 
         let tracer_provider = otlp::traces::init_tracer_provider(&otlp_config, resource.clone())?;
         let logger_provider = otlp::logs::init_logger_provider(&otlp_config, resource)?;
@@ -186,10 +201,15 @@ pub fn init_telemetry(
 /// Initializes only metrics providers for the process.
 ///
 /// This is useful when another component owns the tracing subscriber setup but
-/// Quickwit still needs to install its metrics recorder.
-pub fn init_meter_provider_only(service_version: &str) -> anyhow::Result<TelemetryHandle> {
+/// Quickwit still needs to install its metrics recorder. The identity and bootstrap
+/// requirements are the same as for [`init_telemetry`].
+pub fn init_meter_provider_only(
+    service_version: &str,
+    node_identity: Option<NodeIdentity<'_>>,
+) -> anyhow::Result<TelemetryHandle> {
     let otlp_config = otlp::OtlpExporterConfig::load_from_env();
-    let meter_provider = metrics::init_metrics_provider(service_version, &otlp_config)?;
+    let meter_provider =
+        metrics::init_metrics_provider(service_version, &otlp_config, node_identity)?;
     Ok(TelemetryHandle {
         tracer_provider: None,
         logger_provider: None,

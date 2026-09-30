@@ -58,7 +58,8 @@ static HISTOGRAMS: LazyLock<DashMap<u64, Arc<HistogramInner>>> = LazyLock::new(D
 ///
 /// **Callers must ensure that the global recorder is installed before
 /// any metric is first accessed.** In Quickwit this is guaranteed by
-/// `init_telemetry()` running before any `LazyLock<Histogram>` is forced.
+/// `init_bootstrap_metrics()` (or `init_telemetry()`) running before any
+/// `LazyLock<Histogram>` is forced.
 ///
 /// Prefer the `histogram!` macro over calling this directly.
 #[doc(hidden)]

@@ -17,7 +17,10 @@ use std::str::FromStr;
 use anyhow::Context;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::resource::ResourceBuilder;
 use quickwit_common::{get_bool_from_env, get_from_env, get_from_env_opt};
+
+use crate::NodeIdentity;
 
 pub const QW_ENABLE_OPENTELEMETRY_OTLP_EXPORTER_ENV_KEY: &str =
     "QW_ENABLE_OPENTELEMETRY_OTLP_EXPORTER";
@@ -107,14 +110,31 @@ impl OtlpExporterConfig {
     }
 }
 
-pub(crate) fn quickwit_resource(service_version: &str) -> Resource {
-    Resource::builder()
+pub(crate) fn quickwit_resource(
+    service_version: &str,
+    node_identity: Option<NodeIdentity<'_>>,
+) -> Resource {
+    let builder = Resource::builder()
         .with_service_name("quickwit")
         .with_attribute(KeyValue::new(
             "service.version",
             service_version.to_string(),
-        ))
-        .build()
+        ));
+    resource_with_node_identity(builder, node_identity)
+}
+
+fn resource_with_node_identity(
+    mut builder: ResourceBuilder,
+    node_identity: Option<NodeIdentity<'_>>,
+) -> Resource {
+    if let Some(identity) = node_identity {
+        // The running node's resolved identity takes precedence over resource env attributes.
+        builder = builder.with_attributes([
+            KeyValue::new("cluster_id", identity.cluster_id.to_string()),
+            KeyValue::new("node_id", identity.node_id.to_string()),
+        ]);
+    }
+    builder.build()
 }
 
 #[cfg(test)]
@@ -122,6 +142,78 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
+
+    #[test]
+    fn test_resource_includes_resolved_node_identity() {
+        let resource = quickwit_resource(
+            "test-version",
+            Some(NodeIdentity {
+                cluster_id: "configured-cluster",
+                node_id: "configured-node",
+            }),
+        );
+        assert_eq!(
+            resource.get(&"cluster_id".into()),
+            Some("configured-cluster".into())
+        );
+        assert_eq!(
+            resource.get(&"node_id".into()),
+            Some("configured-node".into())
+        );
+        assert_eq!(
+            resource.get(&"service.version".into()),
+            Some("test-version".into())
+        );
+        assert_eq!(
+            resource.get(&"service.name".into()),
+            Some("quickwit".into())
+        );
+    }
+
+    #[test]
+    fn test_resolved_identity_overrides_inherited_resource_attributes() {
+        // Model attributes from the environment detector without mutating process-wide env.
+        let builder = Resource::builder_empty().with_attributes([
+            KeyValue::new("cluster_id", "old-cluster"),
+            KeyValue::new("node_id", "old-node"),
+            KeyValue::new("deployment.environment.name", "test"),
+        ]);
+        let resource = resource_with_node_identity(
+            builder,
+            Some(NodeIdentity {
+                cluster_id: "resolved-cluster",
+                node_id: "resolved-node",
+            }),
+        );
+        assert_eq!(
+            resource.get(&"cluster_id".into()),
+            Some("resolved-cluster".into())
+        );
+        assert_eq!(
+            resource.get(&"node_id".into()),
+            Some("resolved-node".into())
+        );
+        assert_eq!(
+            resource.get(&"deployment.environment.name".into()),
+            Some("test".into())
+        );
+        assert_eq!(resource.len(), 3);
+    }
+
+    #[test]
+    fn test_commands_without_node_config_preserve_resource_attributes() {
+        let builder = Resource::builder_empty().with_attributes([
+            KeyValue::new("cluster_id", "env-cluster"),
+            KeyValue::new("node_id", "env-node"),
+        ]);
+        let resource = resource_with_node_identity(builder, None);
+        assert_eq!(
+            resource.get(&"cluster_id".into()),
+            Some("env-cluster".into())
+        );
+        assert_eq!(resource.get(&"node_id".into()), Some("env-node".into()));
+        assert!(resource_with_node_identity(Resource::builder_empty(), None).is_empty());
+    }
 
     #[test]
     fn test_otlp_protocol_from_str() {

@@ -5,6 +5,21 @@ sidebar_position: 70
 
 Quickwit exposes key metrics in the [Prometheus](https://prometheus.io/) format on the `/metrics` endpoint. You can use any front-end that supports Prometheus to examine the behavior of Quickwit visually.
 
+## Node identity in OpenTelemetry
+
+For `quickwit run`, OpenTelemetry logs, traces, and metrics use the resolved node
+configuration's `cluster_id` and `node_id` as resource attributes. Configuration
+file values, interpolation, defaults, and environment overrides are resolved once
+by the normal node-config loader. These identity attributes take precedence over
+conflicting values in `OTEL_RESOURCE_ATTRIBUTES`; other resource attributes and
+exporter settings are unchanged. CLI commands without a node config retain their
+environment-provided resource attributes. Prometheus metric labels are unchanged.
+
+The node config is loaded before exporters are initialized. Diagnostics during
+config loading are logged locally, but measurements made during that bootstrap
+phase are not forwarded to exporters. Cached metric handles created while loading
+a remote config remain usable after telemetry starts.
+
 ## Cache Metrics
 
 Quickwit exposes metrics for several cache components, including `fastfields`, `fd`, `partial_request`, `predicate`, `searcher_split`, and `splitfooter`. These metrics share the same structure.

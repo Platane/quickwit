@@ -22,6 +22,7 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
 use opentelemetry_sdk::runtime;
 
+use crate::NodeIdentity;
 use crate::otlp::{OtlpExporterConfig, OtlpProtocol, quickwit_resource};
 
 impl OtlpProtocol {
@@ -50,12 +51,13 @@ impl OtlpProtocol {
 pub(crate) fn build_recorder(
     service_version: &str,
     otlp_config: &OtlpExporterConfig,
+    node_identity: Option<NodeIdentity<'_>>,
 ) -> anyhow::Result<(OpenTelemetryRecorder, SdkMeterProvider)> {
     let metrics_protocol = otlp_config.metrics_protocol()?;
     let metric_exporter = metrics_protocol.metric_exporter()?;
     let metric_reader = PeriodicReader::builder(metric_exporter, runtime::Tokio).build();
     let metrics_provider = SdkMeterProvider::builder()
-        .with_resource(quickwit_resource(service_version))
+        .with_resource(quickwit_resource(service_version, node_identity))
         .with_reader(metric_reader)
         .build();
     let meter = metrics_provider.meter("quickwit");

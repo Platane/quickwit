@@ -43,7 +43,8 @@ static COUNTERS: LazyLock<DashMap<u64, Arc<CounterInner>>> = LazyLock::new(DashM
 ///
 /// **Callers must ensure that the global recorder is installed before
 /// any metric is first accessed.** In Quickwit this is guaranteed by
-/// `init_telemetry()` running before any `LazyLock<Counter>` is forced.
+/// `init_bootstrap_metrics()` (or `init_telemetry()`) running before any
+/// `LazyLock<Counter>` is forced.
 ///
 /// Prefer the `counter!` macro over calling this directly.
 #[doc(hidden)]

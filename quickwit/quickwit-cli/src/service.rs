@@ -22,6 +22,7 @@ use futures::future::select;
 use itertools::Itertools;
 use quickwit_common::runtimes::RuntimesConfig;
 use quickwit_common::uri::Uri;
+use quickwit_config::NodeConfig;
 use quickwit_config::service::QuickwitService;
 use quickwit_serve::tcp_listener::DefaultTcpListenerResolver;
 use quickwit_serve::{BuildInfo, EnvFilterReloadFn, reload_tls_cert, serve_quickwit};
@@ -113,14 +114,31 @@ impl RunCliCommand {
         })
     }
 
+    /// Resolve config once, before initializing telemetry with its node identity.
+    /// If telemetry is not initialized, first call
+    /// [`quickwit_telemetry_exporters::init_bootstrap_metrics`] to protect cached metric handles.
+    pub async fn load_config(&self) -> anyhow::Result<NodeConfig> {
+        load_node_config(&self.config_uri, self.services.as_ref()).await
+    }
+
     pub async fn execute(&self, env_filter_reload_fn: EnvFilterReloadFn) -> anyhow::Result<()> {
+        let node_config = self.load_config().await?;
+        self.execute_with_config(node_config, env_filter_reload_fn)
+            .await
+    }
+
+    /// Start with the same resolved config used to initialize telemetry, without reloading it.
+    pub async fn execute_with_config(
+        &self,
+        node_config: NodeConfig,
+        env_filter_reload_fn: EnvFilterReloadFn,
+    ) -> anyhow::Result<()> {
         debug!(args = ?self, "run-service");
         let version_text = BuildInfo::get_version_text();
         info!("quickwit version: {version_text}");
         if let Some(services) = &self.services {
             info!(services = %services.iter().join(", "), "setting services from override");
         }
-        let node_config = load_node_config(&self.config_uri, self.services.as_ref()).await?;
         let (storage_resolver, metastore_resolver) =
             get_resolvers(&node_config.storage_configs, &node_config.metastore_configs);
         crate::busy_detector::set_enabled(true);
@@ -172,10 +190,40 @@ mod tests {
         let config_uri = Uri::from_str(&format!("file://{}", config_path.display()))?;
         let enabled_services = HashSet::from([QuickwitService::Searcher]);
 
-        let node_config = load_node_config(&config_uri, Some(&enabled_services)).await?;
+        let command = RunCliCommand {
+            config_uri,
+            services: Some(enabled_services.clone()),
+        };
+        let node_config = command.load_config().await?;
 
         assert_eq!(node_config.enabled_services, enabled_services);
         assert!(node_config.searcher_config.use_metastore_read_replica);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_load_config_resolves_identity_from_custom_config_file() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let config_path = temp_dir.path().join("custom-node.yaml");
+        std::fs::write(
+            &config_path,
+            format!(
+                "version: 0.8\ndata_dir: {}\ncluster_id: configured-cluster\nnode_id: \
+                 configured-node\n",
+                temp_dir.path().display(),
+            ),
+        )?;
+        let command = RunCliCommand {
+            config_uri: Uri::from_str(&format!("file://{}", config_path.display()))?,
+            services: None,
+        };
+        let node_config = command.load_config().await?;
+        let identity = quickwit_telemetry_exporters::NodeIdentity {
+            cluster_id: &node_config.cluster_id,
+            node_id: node_config.node_id.as_str(),
+        };
+        assert_eq!(identity.cluster_id, "configured-cluster");
+        assert_eq!(identity.node_id, "configured-node");
         Ok(())
     }
 

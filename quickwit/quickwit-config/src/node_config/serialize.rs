@@ -1075,7 +1075,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_node_config_env_var_override() {
-        let config_yaml = "version: 0.8";
+        let config_yaml = "version: 0.8\ncluster_id: config-cluster\nnode_id: config-node";
         let mut env_vars = HashMap::new();
         env_vars.insert("QW_CLUSTER_ID".to_string(), "test-cluster".to_string());
         env_vars.insert("QW_NODE_ID".to_string(), "test-node".to_string());

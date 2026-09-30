@@ -26,7 +26,9 @@ use quickwit_cli::proc_io::start_proc_io_metrics_loop;
 use quickwit_cli::{busy_detector, install_default_crypto_ring_provider};
 use quickwit_common::runtimes::scrape_tokio_runtime_metrics;
 use quickwit_serve::{BuildInfo, EnvFilterReloadFn};
+use quickwit_telemetry_exporters::NodeIdentity;
 use tracing::error;
+use tracing::instrument::WithSubscriber;
 
 #[cfg(feature = "tokio-console")]
 const QW_ENABLE_TOKIO_CONSOLE_ENV_KEY: &str = "QW_ENABLE_TOKIO_CONSOLE";
@@ -86,6 +88,7 @@ fn init_telemetry(
     service_version: &str,
     level: tracing::Level,
     ansi_colors: bool,
+    node_identity: Option<NodeIdentity<'_>>,
 ) -> anyhow::Result<(
     quickwit_telemetry_exporters::TelemetryHandle,
     EnvFilterReloadFn,
@@ -93,8 +96,10 @@ fn init_telemetry(
     #[cfg(feature = "tokio-console")]
     {
         if quickwit_common::get_bool_from_env(QW_ENABLE_TOKIO_CONSOLE_ENV_KEY, false) {
-            let telemetry_handle =
-                quickwit_telemetry_exporters::init_meter_provider_only(service_version)?;
+            let telemetry_handle = quickwit_telemetry_exporters::init_meter_provider_only(
+                service_version,
+                node_identity,
+            )?;
             console_subscriber::init();
             return Ok((
                 telemetry_handle,
@@ -110,7 +115,8 @@ fn init_telemetry(
     let (registry, env_filter_reload_fn) =
         quickwit_telemetry_exporters::default_tracing_registry(level, ansi_colors)?;
 
-    let telemetry_handle = quickwit_telemetry_exporters::init_telemetry(service_version, registry)?;
+    let telemetry_handle =
+        quickwit_telemetry_exporters::init_telemetry(service_version, registry, node_identity)?;
     Ok((telemetry_handle, env_filter_reload_fn))
 }
 
@@ -119,11 +125,29 @@ async fn main_impl() -> anyhow::Result<()> {
 
     install_default_crypto_ring_provider();
 
+    let node_config = match &command {
+        CliCommand::Run(run) => {
+            // Config loading can register cached storage metrics before the identity is known.
+            quickwit_telemetry_exporters::init_bootstrap_metrics()?;
+            // Keep config-loading diagnostics visible without initializing OTLP prematurely.
+            let (registry, _) = quickwit_telemetry_exporters::default_tracing_registry(
+                command.default_log_level(),
+                ansi_colors,
+            )?;
+            Some(run.load_config().with_subscriber(registry).await?)
+        }
+        _ => None,
+    };
+
     let build_info = BuildInfo::get();
     let (telemetry_handle, env_filter_reload_fn) = init_telemetry(
         &build_info.version,
         command.default_log_level(),
         ansi_colors,
+        node_config.as_ref().map(|config| NodeIdentity {
+            cluster_id: &config.cluster_id,
+            node_id: config.node_id.as_str(),
+        }),
     )?;
     register_build_info_metric(build_info);
 
@@ -136,7 +160,17 @@ async fn main_impl() -> anyhow::Result<()> {
     #[cfg(target_os = "linux")]
     start_proc_io_metrics_loop();
 
-    let return_code: i32 = if let Err(command_error) = command.execute(env_filter_reload_fn).await {
+    let command_result = match command {
+        CliCommand::Run(run) => {
+            run.execute_with_config(
+                node_config.expect("run config was loaded before initializing telemetry"),
+                env_filter_reload_fn,
+            )
+            .await
+        }
+        command => command.execute(env_filter_reload_fn).await,
+    };
+    let return_code: i32 = if let Err(command_error) = command_result {
         error!(error=%command_error, "command failed");
         eprintln!(
             "{} command failed: {:?}\n",
